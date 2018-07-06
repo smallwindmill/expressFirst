@@ -1,0 +1,22 @@
+{
+  "name": "expressfirst",
+  "version": "1.0.0",
+  "description": "nodo",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "new"
+  ],
+  "author": "smallwindmill",
+  "license": "ISC",
+  "dependencies": {
+    "connect-multiparty": "^2.1.1",
+    "cookie-parser": "^1.4.3",
+    "express": "^4.16.3",
+    "moment": "^2.22.2",
+    "multer": "^1.3.1",
+    "mysql": "^2.15.0"
+  }
+}
