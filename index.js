@@ -12,9 +12,11 @@ var connection = mysql.createConnection({
   host:'localhost',
   user:'root',
   password: '@123456',
-  database: 'userPrivate'
+  database: 'userPrivate',
+  multipleStatements: true //允许多次运行多条查询语句
 });
 connection.connect();
+
 
 var len = "create table if not exists `userImage`("+
   "`user_id` int AUTO_INCREMENT,"+
@@ -24,13 +26,6 @@ var len = "create table if not exists `userImage`("+
   "`uploadTime` DATE,"+
   "primary key(`user_id`))engine=InnoDB default charset=utf8;"
 
-/*var len = CREATE TABLE `user_t` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `user_name` varchar(40) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  `age` int(4) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;*/
 connection.query(len,(err,res)=>{
   if(err){
     console.log("error:"+err.message);
@@ -39,13 +34,8 @@ connection.query(len,(err,res)=>{
   // console.log(res);
 })
 
-var changQuery = 'ALTER TABLE `userImage` ADD UNIQUE KEY(`user_name`);alter table `userImage` modify column `user_name` datetime;';
-connection.query(changQuery,(err,res)=>{
-  if(err){
-    console.log("error:"+err.message);
-    return;
-  }
-  })
+connection.query('ALTER TABLE `userImage` ADD UNIQUE KEY(`user_name`);alter table `userImage` modify `uploadTime` datetime;alter table `userImage` modify `user_name` varchar(55);alter table `userImage` modify `image_name` varchar(55);');
+// 添加索引，修改字段类型及长度
 // var multiparty = require('multiparty');
 
 var app= express();
@@ -75,11 +65,7 @@ app.get('/:folder/:filename',function(req,res){
   // console.log(folder+','+filename)
   res.sendFile(__dirname+'/'+req.params.folder+'/'+req.params.filename);
 })
-
-app.get('/canvas.html',function(req,res){
-  var hh=path.resolve(__dirname, '../..')
-  res.sendFile(hh+'/H5/canvas.html');
-})
+// 返回请求中包含一层文件夹的文件
 
 
 app.get('/process_get',function(req,res){
@@ -105,6 +91,35 @@ var fs = require('fs');
 var router = express.Router();
 // var formidable = require("formidable");
 
+// 读取请求文件，保存并重命名，存入数据库
+function storageFile(req,res){
+  fs.writeFileSync('public/'+req.files.file.originalFilename,fs.readFileSync(req.files.file.path),function(err){
+     if(err){
+      throw err;
+     }
+  });
+  // fs.writeFileSync(to, fs.readFileSync(from));
+  // 复制文件
+  fs.rename(req.files.file.path,'temp/'+req.files.file.originalFilename, function(err){
+     if(err){
+      throw err;
+     }
+    });
+    var len_insert = "insert into userImage values(?,?,?,?,?);"
+    var uploadTime = moment().format('YYYY-MM-DD HH:MM:SS');
+    var uploadUrl = 'http://'+req.headers.host+'/public/'+req.files.file.originalFilename;
+    var insertParser = [,req.files.file.userName,'headImage',uploadUrl,uploadTime];
+    connection.query(len_insert,insertParser,(err,res)=>{
+      if(err){
+        console.log('[inset error]-',err.message);
+        // console.log(req.headers.host,uploadTime);
+        console.log(uploadUrl.length);
+        return;
+      }
+      console.log('***********insert***********');
+      console.log('inset ID:',res,uploadTime);
+    })
+}
 
  app.post('/file_upload',multipartMiddleware,function(req,res){
   /*const bufferFile = Buffer.alloc(1000000);
@@ -116,70 +131,28 @@ var router = express.Router();
     console.log("存储body成功");
   })*/
   // console.log(req.files);
-  fs.writeFileSync('public/'+req.files.file.originalFilename,fs.readFileSync(req.files.file.path),function(err){
-     if(err){
-      throw err;
-     }
-     // console.log('copy done!');
-   });
-  // fs.writeFileSync(to, fs.readFileSync(from));
-  // 复制文件
-  fs.rename(req.files.file.path,'temp/'+req.files.file.originalFilename, function(err){
-     if(err){
-      throw err;
-     }
-    });
-     // console.log('rename done!');
-    var len_insert = "insert into userImage values(?,?,?,?,?);"
-    var uploadTime = moment().format('YYYY-MM-DD HH:MM:SS');
-    var uploadUrl = 'http://'+req.headers.host+'/public/'+req.files.file.originalFilename;
-    var insertParser = [,'first','headImage',uploadUrl,uploadTime];
-    connection.query(len_insert,insertParser,(err,res)=>{
-      if(err){
-        console.log('[inset error]-',err.message);
-        // console.log(req.headers.host,uploadTime);
-        console.log(uploadUrl.length);
-        return;
+  // console.log(req.body.userName);
+  connection.query('select userId from userInfo where userId='+req.body.userName,(error,result,fileds)=>{
+  // connection.query('select userId from userInfo where sex=0',(error,result,fileds)=>{
+    var resultCopy = JSON.parse(JSON.stringify(result));
+      console.log(resultCopy,resultCopy.userId);
+      if(req.body.userName!=result[0].userId){
+        res.json({result:'fail',data:{},message:'该用户不存在'});
+        return false;
+      }else{
+        var result = {
+          result: 'success',
+          data: result,
+          message: '成功'
+        }
+       return res.jsonp(result);
       }
-      console.log('***********insert***********');
-      console.log('inset ID:',res,uploadTime);
-    })
-    res.json({result: 'success', data: {imageUrl: 'http://'+req.headers.host+'/public/'+req.files.file.originalFilename}});
-
-  // var des_file=__dirname+'/'+req.files[0].originalname;
-/* fs.readFile(req.files[0].path,function(err,data){
-    if(err){
-      console.log(err);
-    }else{
-      response={
-        message:'File uploaded successfully',
-        filename:req.files[0].originalname
-      }
-    }
-    console.log(response);
-    res.end(JSON.stringify(response));
-  })*/
-})
-
-/*router.use(function firstFunc(req,res,next){
-    console.log("Time: ",Date.now());
-    console.log(req.files);
-    // next();
-})*/
-
-/*router.post('/file_upload',function(req,res,next){
-  router.form = new formidable.IncomingForm();
-  router.form.parse(req,function(err,fields,files){
-    if(err){
-      return next(err);
-    }
-    console.log(111111);
-    console.log(req,err,fields,files);
-    // modifyUserHeader(req,res,fields,files);
   })
-  res.send('thanks');
-})*/
 
+  if(!req.files){return false;}
+  // storageFile(req,res);
+ /* res.json({result: 'success', data: {imageUrl: 'http://'+req.headers.host+'/public/'+req.files.file.originalFilename}});*/
+ })
 
 /*app.post('/file_upload2', upload.fields([{name: 'inputFile', maxCount: 1}]),function(req,res,next){
      var inputFiles = req.files; //未传时为undefined
